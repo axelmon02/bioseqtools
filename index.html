@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BioSeqTools</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      margin: 0;
+      font-size: 10pt;
+    }
+    textarea, pre, #output {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 14px;
+}
+    header {
+      background: #2c3e50;
+      color: white;
+      padding: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    nav {
+      background: #34495e;
+      display: flex;
+      padding: 10px;
+    }
+    nav a {
+      color: white;
+      padding: 10px;
+      text-decoration: none;
+      margin-right: 10px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    nav a:hover {
+      background: #1abc9c;
+    }
+    .content {
+      padding: 20px;
+      display: none;
+      font-family: 'Courier New', monospace;
+    }
+    .content.active {
+      display: block;
+    }
+    textarea {
+      width: 100%;
+      height: 100px;
+      margin-bottom: 10px;
+    }
+    button {
+      padding: 8px 16px;
+      margin-top: 5px;
+    }
+    pre {
+      background: #fff;
+      padding: 10px;
+      border: 1px solid #ccc;
+      white-space: pre-wrap;
+    }
+    .download-button {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>BioSeqTools</h1>
+  <img src="Imagen1.png" alt="Logo" width="100">
+</header>
+
+<nav>
+  <a data-target="herramienta1">Degenerate Oligonucleotide Expansion</a>
+  <a data-target="herramienta2">Reverse Complement</a>
+  <a data-target="herramienta3">Alignments</a>
+</nav>
+
+<div class="content active" id="herramienta1">
+  <h2>Degenerate Oligonucleotide Expansion</h2>
+  <p class="tool-description">
+  In silico expansion of degenerate oligonucleotides based on IUPAC nucleotide codes.
+</p>
+  <textarea id="sequence" placeholder="Enter nucleotide sequence..."></textarea>
+  <button onclick="processSequence()">Expand degenerate sequence</button>
+  <div id="output" style="margin-top:10px"></div>
+</div>
+
+<div class="content" id="herramienta2">
+  <h2>Reverse Complement</h2>
+  <textarea id="reverseInput" placeholder="Enter nucleotide sequence..."></textarea>
+  <button onclick="generateReverseComplement()">Reverse Complement</button>
+  <div id="reverseOutput" style="margin-top:10px"></div>
+</div>
+
+<div class="content" id="herramienta3">
+  <h2>Alignments</h2>
+  <textarea id="alignmentInput" placeholder="Pega secuencias FASTA..."></textarea><br>
+  <button onclick="generateAccessionList()">Cargar referencias</button>
+  <select id="referenceSelect"></select>
+  <button onclick="alignSequences()">Alinear</button>
+  <button class="download-button" onclick="downloadAlignment()">Descargar</button>
+  <div id="alignmentOutput" style="margin-top:10px"></div>
+</div>
+
+<footer style="padding:10px;text-align:center;background:#2c3e50;color:white;margin-top:20px">
+  by <strong>AM Monreal-Hernández 2024</strong>
+</footer>
+
+<script>
+  // Navegación entre pestañas
+  function isAmbiguous(base) {
+  return !["A", "T", "C", "G", "U"].includes(base);
+}
+
+  document.querySelectorAll('nav a').forEach(link => {
+    link.addEventListener('click', e => {
+      const target = e.target.dataset.target;
+      document.querySelectorAll('.content').forEach(sec => {
+        sec.classList.toggle('active', sec.id === target);
+      });
+    });
+  });
+
+  // --- Funciones básicas ---
+
+function processSequence() {
+  const seq = document.getElementById('sequence').value
+    .trim()
+    .toUpperCase();
+
+  if (!seq) {
+    alert("Introduce una secuencia primero.");
+    return;
+  }
+
+  if (!/^[ATGCRYSWKMBDHVN]+$/.test(seq)) {
+    alert("La secuencia contiene caracteres no válidos (IUPAC).");
+    return;
+  }
+
+  const iupac = {
+    A: ["A"],
+    T: ["T"],
+    G: ["G"],
+    C: ["C"],
+    R: ["A", "G"],
+    Y: ["C", "T"],
+    S: ["G", "C"],
+    W: ["A", "T"],
+    K: ["G", "T"],
+    M: ["A", "C"],
+    B: ["C", "G", "T"],
+    D: ["A", "G", "T"],
+    H: ["A", "C", "T"],
+    V: ["A", "C", "G"],
+    N: ["A", "T", "G", "C"]
+  };
+
+  let combinations = [""];
+
+  for (const base of seq) {
+    const options = iupac[base];
+    const temp = [];
+    combinations.forEach(prefix => {
+      options.forEach(b => {
+        temp.push(prefix + b);
+      });
+    });
+    combinations = temp;
+  }
+
+  if (combinations.length > 5000) {
+    alert("Demasiadas combinaciones. Reduce las ambigüedades.");
+    return;
+  }
+
+  const originalSeq = seq;
+
+const formattedOutput = combinations
+  .map(expanded => formatTriplets(expanded, originalSeq))
+  .join("<br>");
+
+
+document.getElementById('output').innerHTML =
+  `<pre>${formattedOutput}</pre>`;
+}
+
+function colourBase(base) {
+  const colours = {
+    A: "red",
+    T: "gold",
+    C: "blue",
+    G: "green",
+    U: "purple"
+  };
+
+  const colour = colours[base] || "black";
+  return `<span style="color:${colour}; font-weight:bold;">${base}</span>`;
+}
+
+function formatTriplets(expandedSeq, originalSeq) {
+  let formatted = "";
+
+  for (let i = 0; i < expandedSeq.length; i++) {
+    const base = expandedSeq[i];
+    const originalBase = originalSeq[i];
+
+    if (isAmbiguous(originalBase)) {
+      formatted += colourBase(base);   // ✔️ solo si venía de ambigüedad
+    } else {
+      formatted += base;               // ✔️ negro, sin color
+    }
+
+    if ((i + 1) % 3 === 0 && i !== expandedSeq.length - 1) {
+      formatted += " ";
+    }
+  }
+
+  return formatted;
+}
+
+
+
+
+  function generateReverseComplement() {
+    const seq = document.getElementById('reverseInput').value.trim().toUpperCase();
+    if(!seq) {
+      alert("Introduce una secuencia primero.");
+      return;
+    }
+    const comp = { A:"T", T:"A", G:"C", C:"G", N:"N" };
+    const revComp = seq.split('').reverse().map(b => comp[b] || "N").join('');
+    document.getElementById('reverseOutput').innerHTML = `<pre>${revComp}</pre>`;
+  }
+
+  // --- Alignment ---
+  let lastAlignmentText = "";
+
+  function sanitizeAccession(rawAcc) {
+    return rawAcc.split('.')[0];
+  }
+
+  function generateAccessionList() {
+    const raw = document.getElementById("alignmentInput").value.trim().split(/\n+/);
+    const accessions = raw.filter(line => line.startsWith(">"))
+                           .map(line => sanitizeAccession(line.split(" ")[0].replace(">", "")));
+    const select = document.getElementById("referenceSelect");
+    select.innerHTML = "";
+    if(accessions.length === 0) {
+      alert("No se encontraron secuencias FASTA.");
+      return;
+    }
+    accessions.forEach((acc,i)=>{
+      const opt = document.createElement("option");
+      opt.value = i;
+      opt.textContent = acc;
+      select.appendChild(opt);
+    });
+  }
+
+  function alignSequences() {
+    const lines = document.getElementById("alignmentInput").value.trim().split(/\n+/);
+    const sequences = [];
+    let currentSeq="", currentId="";
+    lines.forEach(line=>{
+      if(line.startsWith(">")){
+        if(currentSeq && currentId) sequences.push({id:currentId, seq:currentSeq});
+        currentId = sanitizeAccession(line.split(" ")[0].replace(">",""));
+        currentSeq="";
+      } else currentSeq += line.trim();
+    });
+    if(currentSeq && currentId) sequences.push({id:currentId, seq:currentSeq});
+    const refIndex = parseInt(document.getElementById("referenceSelect").value);
+    if(isNaN(refIndex) || !sequences[refIndex]){
+      alert("Selecciona una referencia válida.");
+      return;
+    }
+    const refSeq = sequences[refIndex].seq.toUpperCase();
+    const result = sequences.map((s,idx)=>{
+      let aligned = "";
+      if(idx === refIndex) aligned = s.seq;
+      else {
+        for(let i=0;i<Math.min(s.seq.length, refSeq.length);i++){
+          aligned += s.seq[i]===refSeq[i]?"-":s.seq[i];
+        }
+      }
+      return `>${s.id}\t${aligned}`;
+    }).join("\n");
+    lastAlignmentText = result;
+    document.getElementById("alignmentOutput").innerHTML = `<pre>${result}</pre>`;
+  }
+
+  function downloadAlignment() {
+    if(!lastAlignmentText) { alert("No hay alineamiento para descargar."); return; }
+    const blob = new Blob([lastAlignmentText], {type:"text/plain"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "alineamiento.txt";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+</script>
+
+</body>
+</html>
